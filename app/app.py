@@ -19,27 +19,49 @@ pipeline {
             steps {
                 echo 'Escaneando con Trivy...'
                 sh '''
-                    docker run --rm \
-                    -v $(pwd):/proyecto \
-                    aquasec/trivy:latest fs /proyecto/app \
+                    trivy fs app \
                     --exit-code 1 \
                     --severity HIGH,CRITICAL \
                     --format table \
-                    > reporte.txt 2>&1 || true
+                    > reporte-trivy.txt 2>&1 || true
                 '''
             }
         }
 
-        stage('Evaluar reporte') {
+        stage('Escanear codigo fuente') {
+            steps {
+                echo 'Escaneando con Semgrep...'
+                sh '''
+                    semgrep scan app \
+                    --config=p/python \
+                    --severity ERROR \
+                    --text \
+                    > reporte-semgrep.txt 2>&1 || true
+                '''
+            }
+        }
+
+        stage('Evaluar reportes') {
             steps {
                 script {
-                    def reporte = readFile('reporte.txt')
-                    echo reporte
-                    if (reporte.contains('HIGH') || reporte.contains('CRITICAL')) {
-                        error('Vulnerabilidades encontradas. Despliegue bloqueado.')
-                    } else {
-                        echo 'Codigo limpio. Continuando...'
+                    def reporteTrivy = readFile('reporte-trivy.txt')
+                    def reporteSemgrep = readFile('reporte-semgrep.txt')
+
+                    echo '=== REPORTE TRIVY ==='
+                    echo reporteTrivy
+
+                    echo '=== REPORTE SEMGREP ==='
+                    echo reporteSemgrep
+
+                    if (reporteTrivy.contains('HIGH') || reporteTrivy.contains('CRITICAL')) {
+                        error('Trivy: Dependencias vulnerables encontradas. Despliegue bloqueado.')
                     }
+
+                    if (reporteSemgrep.contains('ERROR')) {
+                        error('Semgrep: Vulnerabilidades en codigo fuente encontradas. Despliegue bloqueado.')
+                    }
+
+                    echo 'Codigo limpio. Continuando...'
                 }
             }
         }
@@ -58,14 +80,14 @@ pipeline {
             sh """
                 curl -s -X POST https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage \
                 -d chat_id=${TELEGRAM_CHAT_ID} \
-                -d text='🚨 Despliegue BLOQUEADO por vulnerabilidades en el codigo'
+                -d text='Despliegue BLOQUEADO por vulnerabilidades en el codigo'
             """
         }
         success {
             sh """
                 curl -s -X POST https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage \
                 -d chat_id=${TELEGRAM_CHAT_ID} \
-                -d text='✅ App desplegada exitosamente. Sin vulnerabilidades detectadas'
+                -d text='App desplegada exitosamente. Sin vulnerabilidades detectadas'
             """
         }
     }
