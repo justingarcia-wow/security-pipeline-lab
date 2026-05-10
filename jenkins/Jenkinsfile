@@ -19,9 +19,7 @@ pipeline {
             steps {
                 echo 'Escaneando con Trivy...'
                 sh '''
-                    docker run --rm \
-                    -v $WORKSPACE:/proyecto \
-                    aquasec/trivy:latest fs /proyecto/app \
+                    trivy fs app \
                     --exit-code 1 \
                     --severity HIGH,CRITICAL \
                     --format table \
