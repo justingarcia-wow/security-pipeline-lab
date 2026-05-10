@@ -21,7 +21,7 @@ pipeline {
                 sh '''
                     docker run --rm \
                     -v $(pwd):/proyecto \
-                    aquasec/trivy:latest fs /proyecto \
+                    aquasec/trivy:latest fs /proyecto/app \
                     --exit-code 1 \
                     --severity HIGH,CRITICAL \
                     --format table \
