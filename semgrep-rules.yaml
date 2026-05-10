@@ -1,24 +1,24 @@
 rules:
   - id: sql-injection
-    patterns:
-      - pattern: |
-          $QUERY = "..." + $INPUT
-          $cursor.execute($QUERY)
+    pattern: |
+      $cursor.execute("..." + $INPUT)
     message: "SQL Injection detectado. No concatenes variables en queries SQL."
     languages: [python]
     severity: ERROR
 
   - id: command-injection
-    pattern: os.system("..." + $INPUT)
+    pattern: |
+      os.system("..." + $INPUT)
     message: "Command Injection detectado. No concatenes variables en comandos del sistema."
     languages: [python]
     severity: ERROR
 
-  - id: hardcoded-password
-    pattern: $VAR = "..."
+  - id: hardcoded-secret
+    pattern: |
+      $VAR = "..."
     metavariable-regex:
       metavariable: $VAR
-      regex: ".*(PASSWORD|SECRET|KEY).*"
+      regex: (PASSWORD|SECRET|KEY)
     message: "Credencial hardcodeada detectada. Usa variables de entorno."
     languages: [python]
     severity: ERROR
