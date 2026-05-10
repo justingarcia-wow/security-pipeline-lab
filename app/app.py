@@ -1,93 +1,32 @@
-pipeline {
-    agent any
+from flask import Flask, request
+import os
+import sqlite3
 
-    environment {
-        TELEGRAM_TOKEN = credentials('TELEGRAM_TOKEN')
-        TELEGRAM_CHAT_ID = '1221106616'
-    }
+app = Flask(__name__)
 
-    stages {
+# Contraseñas hardcodeadas - VULNERABILIDAD 1
+DB_PASSWORD = "supersecreto123"
+SECRET_KEY = "clave-super-secreta-hardcodeada"
 
-        stage('Clonar codigo') {
-            steps {
-                echo 'Clonando el repositorio...'
-                checkout scm
-            }
-        }
+@app.route('/')
+def index():
+    return "Hola, soy una app insegura!"
 
-        stage('Escanear vulnerabilidades') {
-            steps {
-                echo 'Escaneando con Trivy...'
-                sh '''
-                    trivy fs app \
-                    --exit-code 1 \
-                    --severity HIGH,CRITICAL \
-                    --format table \
-                    > reporte-trivy.txt 2>&1 || true
-                '''
-            }
-        }
+# VULNERABILIDAD 2 - SQL Injection
+@app.route('/usuario')
+def get_usuario():
+    nombre = request.args.get('nombre')
+    conn = sqlite3.connect('usuarios.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM usuarios WHERE nombre = '" + nombre + "'")
+    return str(cursor.fetchall())
 
-        stage('Escanear codigo fuente') {
-            steps {
-                echo 'Escaneando con Semgrep...'
-                sh '''
-                    semgrep scan app \
-                    --config=semgrep-rules.yaml \
-                    --text \
-                    > reporte-semgrep.txt 2>&1 || true
-                '''
-            }
-        }
+# VULNERABILIDAD 3 - Command Injection
+@app.route('/ping')
+def ping():
+    host = request.args.get('host')
+    resultado = os.system("ping -c 1 " + host)
+    return "Resultado: " + str(resultado)
 
-        stage('Evaluar reportes') {
-            steps {
-                script {
-                    def reporteTrivy = readFile('reporte-trivy.txt')
-                    def reporteSemgrep = readFile('reporte-semgrep.txt')
-
-                    echo '=== REPORTE TRIVY ==='
-                    echo reporteTrivy
-
-                    echo '=== REPORTE SEMGREP ==='
-                    echo reporteSemgrep
-
-                    if (reporteTrivy.contains('HIGH') || reporteTrivy.contains('CRITICAL')) {
-                        error('Trivy: Dependencias vulnerables encontradas. Despliegue bloqueado.')
-                    }
-
-                    if (reporteSemgrep.contains('ERROR')) {
-                        error('Semgrep: Vulnerabilidades en codigo fuente encontradas. Despliegue bloqueado.')
-                    }
-
-                    echo 'Codigo limpio. Continuando...'
-                }
-            }
-        }
-
-        stage('Desplegar app') {
-            steps {
-                echo 'Desplegando la app...'
-                sh 'docker-compose up -d --build'
-            }
-        }
-
-    }
-
-    post {
-        failure {
-            sh """
-                curl -s -X POST https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage \
-                -d chat_id=${TELEGRAM_CHAT_ID} \
-                -d text='Despliegue BLOQUEADO por vulnerabilidades en el codigo'
-            """
-        }
-        success {
-            sh """
-                curl -s -X POST https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage \
-                -d chat_id=${TELEGRAM_CHAT_ID} \
-                -d text='App desplegada exitosamente. Sin vulnerabilidades detectadas'
-            """
-        }
-    }
-}
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
