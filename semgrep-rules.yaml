@@ -1,7 +1,7 @@
 rules:
   - id: sql-injection
     pattern: |
-      $cursor.execute("..." + $INPUT)
+      $CURSOR.execute("..." + $INPUT)
     message: "SQL Injection detectado. No concatenes variables en queries SQL."
     languages: [python]
     severity: ERROR
@@ -14,8 +14,7 @@ rules:
     severity: ERROR
 
   - id: hardcoded-secret
-    pattern: |
-      $VAR = "..."
+    pattern: $VAR = "..."
     metavariable-regex:
       metavariable: $VAR
       regex: (PASSWORD|SECRET|KEY)
