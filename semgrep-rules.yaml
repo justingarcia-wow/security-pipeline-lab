@@ -1,7 +1,6 @@
 rules:
   - id: sql-injection
-    pattern: |
-      $CURSOR.execute("..." + $INPUT)
+    pattern: $CURSOR.execute("..." + $INPUT)
     message: "SQL Injection detectado. No concatenes variables en queries SQL."
     languages: [python]
     severity: ERROR
