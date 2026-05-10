@@ -1,76 +1,72 @@
-from flask import Flask, request
-import sqlite3
-import os
-import subprocess
+pipeline {
+    agent any
 
-app = Flask(__name__)
+    environment {
+        TELEGRAM_TOKEN = credentials('TELEGRAM_TOKEN')
+        TELEGRAM_CHAT_ID = '1221106616'
+    }
 
-# ❌ MAL:
-# Contraseña escrita directamente en el código
-PASSWORD = "123456"
+    stages {
 
-# ✅ CORRECTO:
-# Usar variables de entorno
-# PASSWORD = os.getenv("PASSWORD")
+        stage('Clonar codigo') {
+            steps {
+                echo 'Clonando el repositorio...'
+                checkout scm
+            }
+        }
 
+        stage('Escanear vulnerabilidades') {
+            steps {
+                echo 'Escaneando con Trivy...'
+                sh '''
+                    docker run --rm \
+                    -v $(pwd):/proyecto \
+                    aquasec/trivy:latest fs /proyecto/app \
+                    --exit-code 1 \
+                    --severity HIGH,CRITICAL \
+                    --format table \
+                    > reporte.txt 2>&1 || true
+                '''
+            }
+        }
 
-@app.route('/')
-def inicio():
-    return "App vulnerable"
+        stage('Evaluar reporte') {
+            steps {
+                script {
+                    def reporte = readFile('reporte.txt')
+                    echo reporte
+                    if (reporte.contains('HIGH') || reporte.contains('CRITICAL')) {
+                        error('Vulnerabilidades encontradas. Despliegue bloqueado.')
+                    } else {
+                        echo 'Codigo limpio. Continuando...'
+                    }
+                }
+            }
+        }
 
+        stage('Desplegar app') {
+            steps {
+                echo 'Desplegando la app...'
+                sh 'docker-compose up -d --build'
+            }
+        }
 
-# ---------------------------
-# VULNERABILIDAD 2 - SQL Injection
-# ---------------------------
-@app.route('/login')
-def login():
+    }
 
-    usuario = request.args.get('user')
-
-    conn = sqlite3.connect('usuarios.db')
-    cursor = conn.cursor()
-
-    # ❌ MAL:
-    # El usuario controla parte del SQL
-    query = f"SELECT * FROM usuarios WHERE nombre = '{usuario}'"
-
-    cursor.execute(query)
-
-    # ✅ CORRECTO:
-    # Separar el SQL de los datos del usuario
-    # cursor.execute(
-    #     "SELECT * FROM usuarios WHERE nombre = ?",
-    #     (usuario,)
-    # )
-
-    return str(cursor.fetchall())
-
-
-# ---------------------------
-# VULNERABILIDAD 3 - Command Injection
-# ---------------------------
-@app.route('/ping')
-def ping():
-
-    host = request.args.get('host')
-
-    # ❌ MAL:
-    # El usuario controla el comando del sistema
-    os.system(f"ping -c 1 {host}")
-
-    # ✅ CORRECTO:
-    # Pasar argumentos separados y sin shell
-    # subprocess.run(
-    #     ["ping", "-c", "1", host],
-    #     shell=False
-    # )
-
-    return "Ping ejecutado"
-
-
-# ❌ MAL:
-# debug=True muestra errores internos
-
-# ✅ CORRECTO:
-# debug=False en producción
-app.run(debug=True)
+    post {
+        failure {
+            sh """
+                curl -s -X POST https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage \
+                -d chat_id=${TELEGRAM_CHAT_ID} \
+                -d text='🚨 Despliegue BLOQUEADO por vulnerabilidades en el codigo'
+            """
+        }
+        success {
+            sh """
+                curl -s -X POST https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage \
+                -d chat_id=${TELEGRAM_CHAT_ID} \
+                -d text='✅ App desplegada exitosamente. Sin vulnerabilidades detectadas'
+            """
+        }
+    }
+}
