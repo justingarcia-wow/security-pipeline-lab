@@ -33,8 +33,7 @@ pipeline {
                 echo 'Escaneando con Semgrep...'
                 sh '''
                     semgrep scan app \
-                    --config=p/python \
-                    --severity ERROR \
+                    --config=semgrep-rules.yaml \
                     --text \
                     > reporte-semgrep.txt 2>&1 || true
                 '''
