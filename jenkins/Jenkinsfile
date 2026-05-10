@@ -35,13 +35,12 @@ pipeline {
                 script {
                     def reporte = readFile('reporte.txt')
                     echo reporte
-
                     if (reporte.contains('HIGH') || reporte.contains('CRITICAL')) {
                         error('Vulnerabilidades encontradas. Despliegue bloqueado.')
                     } else {
                         echo 'Codigo limpio. Continuando...'
                     }
-                }+
+                }
             }
         }
 
@@ -59,14 +58,14 @@ pipeline {
             sh """
                 curl -s -X POST https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage \
                 -d chat_id=${TELEGRAM_CHAT_ID} \
-                -d text='🚨 Despliegue BLOQUEADO por vulnerabilidades en el codigo'
+                -d text='Despliegue BLOQUEADO por vulnerabilidades en el codigo'
             """
         }
         success {
             sh """
                 curl -s -X POST https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage \
                 -d chat_id=${TELEGRAM_CHAT_ID} \
-                -d text='✅ App desplegada exitosamente. Sin vulnerabilidades detectadas'
+                -d text='App desplegada exitosamente. Sin vulnerabilidades detectadas'
             """
         }
     }
